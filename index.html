@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consonância: duas cordas, uma razão</title>
+<style>
+  :root {
+    --ink: #1a2028;
+    --paper: #f6f4ee;
+    --panel: #ffffff;
+    --line: #c9c3b6;
+    --lower: #2f6f8f;
+    --upper: #b8552e;
+    --coincide: #1a2028;
+    --muted: #6b6459;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .wrap {
+    width: 100%;
+    height: 100%;
+    margin: 0 auto;
+    padding: 16px 24px 16px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+  }
+
+  h1 .ratio-live {
+    font-family: "Courier New", monospace;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .stage {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 8px;
+    margin-bottom: 12px;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+  }
+
+  canvas { display: block; width: 100%; height: 100%; }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 10px;
+    margin-bottom: 12px;
+  }
+
+  .ratios {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+
+  button.ratio {
+    font-family: "Courier New", monospace;
+    font-size: 13px;
+    padding: 7px 12px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    cursor: pointer;
+    color: var(--ink);
+    transition: all 0.15s ease;
+  }
+  button.ratio:hover { border-color: var(--ink); }
+  button.ratio:focus-visible { outline: 2px solid var(--lower); outline-offset: 2px; }
+
+  button.ratio[aria-pressed="true"] {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+
+  .spacer { flex: 1 1 auto; min-width: 10px; }
+
+  button.play {
+    font-family: "Iowan Old Style", Georgia, serif;
+    font-size: 13px;
+    padding: 8px 18px;
+    background: var(--lower);
+    color: #fff;
+    border: 1px solid var(--lower);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    min-width: 108px;
+  }
+  button.play:hover { background: #285f7b; }
+  button.play:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  button.play.on { background: var(--upper); border-color: var(--upper); }
+  button.play.on:hover { background: #a24a27; }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    font-size: 13px;
+    color: var(--muted);
+    align-items: center;
+  }
+  .legend .item { display: flex; align-items: center; gap: 6px; }
+  .swatch { width: 20px; height: 3px; border-radius: 2px; display: inline-block; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Duas cordas a vibrar na razão <span class="ratio-live" id="titleRatio">3&#8202;:&#8202;2</span></h1>
+
+  <div class="stage">
+    <canvas id="c" width="1840" height="760"></canvas>
+  </div>
+
+  <div class="controls">
+    <div class="ratios" id="ratios"></div>
+    <div class="spacer"></div>
+    <button class="play" id="play" aria-pressed="false">Reproduzir som</button>
+  </div>
+
+  <div class="legend">
+    <span class="item"><span class="swatch" style="background:var(--lower)"></span> Corda grave</span>
+    <span class="item"><span class="swatch" style="background:var(--upper)"></span> Corda aguda</span>
+    <span class="item"><span class="dot" style="background:var(--coincide)"></span> Coincidência das ondas</span>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+
+  const RATIOS = [
+    { n:2, d:1, name:'2 : 1' },
+    { n:3, d:2, name:'3 : 2' },
+    { n:4, d:3, name:'4 : 3' },
+    { n:5, d:4, name:'5 : 4' },
+    { n:45, d:32, name:'45 : 32' },
+    { n:255, d:190, name:'255 : 190' },
+  ];
+
+  let current = RATIOS[1];
+  const BASE_FREQ = 220;
+
+  const W = canvas.width, H = canvas.height;
+  const padL = 70, padR = 40, padT = 36, padB = 34;
+  const plotW = W - padL - padR;
+  const rowH = (H - padT - padB) / 3;
+  const yLower = padT + rowH * 0.5;
+  const yUpper = padT + rowH * 1.5;
+  const yBoth  = padT + rowH * 2.5;
+  const ampString = rowH * 0.34;
+  const ampWave = rowH * 0.30;
+
+  function cyclesShown() { return current.d; }
+
+  let t0 = performance.now();
+  let raf = null;
+
+  function draw(now) {
+    const t = (now - t0) / 1000;
+    ctx.clearRect(0, 0, W, H);
+
+    const phase = t * 0.35 * 2 * Math.PI;
+    const xToPx = x => padL + x * plotW;
+
+    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+    ctx.lineWidth = 1;
+    [yLower, yUpper, yBoth].forEach(y => {
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W-padR, y); ctx.stroke();
+    });
+
+    ctx.fillStyle = 'rgba(0,0,0,0.42)';
+    ctx.font = '600 20px "Courier New", monospace';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText('GRAVE  ·  '+current.d+'×', padL, padT - 8);
+    ctx.fillText('AGUDA  ·  '+current.n+'×', padL, padT + rowH - 8);
+    ctx.fillText('COMBINADA', padL, padT + rowH*2 - 8);
+
+    const SAMPLES = 900;
+
+    drawString(yLower, current.d, phase, getCSS('--lower'), SAMPLES, xToPx);
+    drawString(yUpper, current.n, phase * (current.n/current.d), getCSS('--upper'), SAMPLES, xToPx);
+
+    drawWave(yBoth, current.d, phase, getCSS('--lower'), SAMPLES, xToPx, 2.5);
+    drawWave(yBoth, current.n, phase * (current.n/current.d), getCSS('--upper'), SAMPLES, xToPx, 2.5);
+    drawCoincidences(yBoth, xToPx);
+
+    raf = requestAnimationFrame(draw);
+  }
+
+  function drawString(yMid, cycles, phase, color, samples, xToPx) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3.5;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    const env = Math.cos(phase);
+    for (let i = 0; i <= samples; i++) {
+      const x = i / samples;
+      const y = yMid - ampString * env * Math.sin(cycles * Math.PI * x);
+      const px = xToPx(x), py = y;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath(); ctx.arc(xToPx(0), yMid, 4, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(xToPx(1), yMid, 4, 0, 7); ctx.fill();
+  }
+
+  function drawWave(yMid, cycles, phase, color, samples, xToPx, lw) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lw;
+    ctx.lineJoin = 'round';
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    for (let i = 0; i <= samples; i++) {
+      const x = i / samples;
+      const y = yMid - ampWave * Math.sin(cycles * 2 * Math.PI * x - phase);
+      const px = xToPx(x), py = y;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawCoincidences(yMid, xToPx) {
+    ctx.fillStyle = getCSS('--coincide');
+    [0, 1].forEach(x => {
+      ctx.beginPath(); ctx.arc(xToPx(x), yMid, 7, 0, 7); ctx.fill();
+    });
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.setLineDash([4, 6]);
+    ctx.lineWidth = 1.5;
+    [0,1].forEach(x => {
+      ctx.beginPath();
+      ctx.moveTo(xToPx(x), padT + rowH*2 + 6);
+      ctx.lineTo(xToPx(x), H - padB + 4);
+      ctx.stroke();
+    });
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = 'rgba(0,0,0,0.42)';
+    ctx.font = 'italic 18px "Iowan Old Style", Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('um período comum — as ondas realinham-se', xToPx(0.5), H - padB + 26);
+    ctx.textAlign = 'left';
+  }
+
+  function getCSS(v) {
+    return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  }
+
+  let actx = null, oscL = null, oscU = null, gain = null, playing = false;
+
+  function startAudio() {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    gain = actx.createGain();
+    gain.gain.value = 0.0001;
+    gain.connect(actx.destination);
+
+    oscL = actx.createOscillator();
+    oscU = actx.createOscillator();
+    oscL.type = 'sine';
+    oscU.type = 'sine';
+    setAudioFreqs();
+    oscL.connect(gain); oscU.connect(gain);
+    oscL.start(); oscU.start();
+    gain.gain.exponentialRampToValueAtTime(0.13, actx.currentTime + 0.06);
+    playing = true;
+  }
+
+  function setAudioFreqs() {
+    if (!oscL) return;
+    const fL = BASE_FREQ;
+    const fU = BASE_FREQ * current.n / current.d;
+    oscL.frequency.setValueAtTime(fL, actx.currentTime);
+    oscU.frequency.setValueAtTime(fU, actx.currentTime);
+  }
+
+  function stopAudio() {
+    if (!actx || !playing) return;
+    const g = gain, o1 = oscL, o2 = oscU;
+    g.gain.cancelScheduledValues(actx.currentTime);
+    g.gain.setValueAtTime(g.gain.value, actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + 0.08);
+    setTimeout(() => { try{o1.stop();o2.stop();}catch(e){} }, 120);
+    oscL = oscU = gain = null;
+    playing = false;
+  }
+
+  const playBtn = document.getElementById('play');
+  playBtn.addEventListener('click', () => {
+    if (!playing) {
+      startAudio();
+      playBtn.textContent = 'Parar som';
+      playBtn.classList.add('on');
+      playBtn.setAttribute('aria-pressed', 'true');
+    } else {
+      stopAudio();
+      playBtn.textContent = 'Reproduzir som';
+      playBtn.classList.remove('on');
+      playBtn.setAttribute('aria-pressed', 'false');
+    }
+  });
+
+  const ratiosEl = document.getElementById('ratios');
+  RATIOS.forEach((r) => {
+    const b = document.createElement('button');
+    b.className = 'ratio';
+    b.innerHTML = r.name.replace(' : ', '&#8202;:&#8202;');
+    b.setAttribute('aria-pressed', r === current ? 'true' : 'false');
+    b.addEventListener('click', () => selectRatio(r));
+    r._btn = b;
+    ratiosEl.appendChild(b);
+  });
+
+  function selectRatio(r) {
+    current = r;
+    RATIOS.forEach(x => x._btn.setAttribute('aria-pressed', x === r ? 'true' : 'false'));
+    t0 = performance.now();
+    setAudioFreqs();
+    document.getElementById('titleRatio').innerHTML = current.name.replace(' : ', '&#8202;:&#8202;');
+  }
+
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (prefersReduced) {
+    draw(performance.now());
+  } else {
+    raf = requestAnimationFrame(draw);
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && playing) {
+      stopAudio();
+      playBtn.textContent = 'Reproduzir som';
+      playBtn.classList.remove('on');
+      playBtn.setAttribute('aria-pressed', 'false');
+    }
+  });
+})();
+</script>
+</body>
+</html>
