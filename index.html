@@ -163,7 +163,6 @@
     { n:4, d:3, name:'4 : 3' },
     { n:5, d:4, name:'5 : 4' },
     { n:45, d:32, name:'45 : 32' },
-    { n:255, d:199, name:'255 : 199' },
   ];
 
   let current = RATIOS[1];
@@ -191,8 +190,8 @@
     const phase = t * 0.35 * 2 * Math.PI;
     const xToPx = x => padL + x * plotW;
 
-    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)';
+    ctx.lineWidth = 1.5;
     [yLower, yUpper, yBoth].forEach(y => {
       ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W-padR, y); ctx.stroke();
     });
@@ -256,9 +255,9 @@
     [0, 1].forEach(x => {
       ctx.beginPath(); ctx.arc(xToPx(x), yMid, 7, 0, 7); ctx.fill();
     });
-    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
-    ctx.setLineDash([4, 6]);
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+    ctx.setLineDash([6, 5]);
+    ctx.lineWidth = 2;
     [0,1].forEach(x => {
       ctx.beginPath();
       ctx.moveTo(xToPx(x), padT + rowH*2 + 6);
